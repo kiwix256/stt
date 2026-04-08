@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1565c0">
+<title>음성 텍스트 변환</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:'Noto Sans KR','Malgun Gothic',sans-serif;background:#eceff1;min-height:100vh;display:flex;flex-direction:column}
+header{background:#1565c0;color:#fff;padding:14px 18px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+header h1{font-size:17px;font-weight:700;flex:1}
+.lang-select{background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.35);color:#fff;padding:6px 10px;border-radius:8px;font-size:13px;outline:none}
+.lang-select option{color:#222;background:#fff}
+.main{flex:1;padding:16px 14px;display:flex;flex-direction:column;gap:14px;max-width:560px;width:100%;margin:0 auto}
+
+/* 권한 화면 */
+#permWrap{background:#fff;border-radius:20px;padding:36px 22px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.09)}
+.pico{font-size:60px;margin-bottom:16px}
+#permWrap h2{font-size:19px;font-weight:700;margin-bottom:10px;color:#1a237e}
+#permWrap p{font-size:14px;color:#666;line-height:1.75;margin-bottom:24px}
+#permBtn{width:100%;background:#1565c0;color:#fff;border:none;border-radius:14px;padding:15px;font-size:16px;font-weight:700;cursor:pointer}
+#permBtn:active{opacity:.85}
+#permErr{margin-top:14px;background:#fff3e0;border-radius:12px;padding:14px;font-size:13px;color:#e65100;line-height:1.9;display:none;text-align:left}
+
+/* 앱 화면 */
+#appWrap{display:none;flex-direction:column;gap:14px}
+
+.status-card{background:#fff;border-radius:20px;padding:24px 18px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.mic-outer{display:inline-flex;align-items:center;justify-content:center;position:relative;margin-bottom:16px}
+.ripple{position:absolute;width:110px;height:110px;border-radius:50%;border:2px solid #d32f2f;opacity:0;transform:scale(.85)}
+.is-rec .ripple{animation:rpl 1.3s ease-out infinite}
+.ripple2{animation-delay:.5s !important}
+@keyframes rpl{0%{opacity:.5;transform:scale(.85)}100%{opacity:0;transform:scale(1.4)}}
+.mic-btn{width:88px;height:88px;border-radius:50%;border:none;background:#1976d2;color:#fff;font-size:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 18px rgba(25,118,210,.4);transition:transform .13s,background .18s;position:relative;z-index:1;user-select:none;-webkit-user-select:none}
+.is-rec .mic-btn{background:#d32f2f;box-shadow:0 4px 18px rgba(211,47,47,.4)}
+.mic-btn:active{transform:scale(.9)}
+
+.st-msg{font-size:15px;font-weight:700;color:#1565c0;min-height:22px;margin-bottom:6px}
+.is-rec .st-msg{color:#d32f2f}
+.interim-box{min-height:22px;font-size:14px;color:#bbb;font-style:italic;padding:0 8px;word-break:keep-all;line-height:1.5}
+
+.bars{display:flex;align-items:center;justify-content:center;gap:4px;height:28px;margin-top:10px;opacity:0;transition:opacity .3s}
+.bars.on{opacity:1}
+.bar{width:5px;height:6px;background:#d32f2f;border-radius:3px}
+.bars.on .bar{animation:bonce .72s ease-in-out infinite}
+.bar:nth-child(2){animation-delay:.1s}.bar:nth-child(3){animation-delay:.2s}
+.bar:nth-child(4){animation-delay:.3s}.bar:nth-child(5){animation-delay:.2s}.bar:nth-child(6){animation-delay:.1s}
+@keyframes bonce{0%,100%{height:5px}50%{height:24px}}
+
+.result-card{background:#fff;border-radius:20px;box-shadow:0 2px 12px rgba(0,0,0,.08);overflow:hidden}
+.card-top{padding:12px 14px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between}
+.card-top h2{font-size:13px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.5px}
+.btns{display:flex;gap:7px}
+.sb{border:none;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .13s}
+.sb:active{opacity:.6}
+.sb.cp{background:#e3f2fd;color:#1565c0}
+.sb.cl{background:#fce4ec;color:#c62828}
+textarea{display:block;width:100%;min-height:190px;padding:14px;font-size:16px;line-height:1.85;color:#222;border:none;outline:none;resize:vertical;font-family:inherit;background:transparent}
+textarea::placeholder{color:#ccc}
+.card-bot{padding:8px 14px;border-top:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center}
+.cnt{font-size:12px;color:#ccc}
+
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ab{border:none;border-radius:16px;padding:14px 10px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:transform .12s}
+.ab:active{transform:scale(.95)}
+.ab.b{background:#1976d2;color:#fff;box-shadow:0 3px 10px rgba(25,118,210,.3)}
+.ab.g{background:#2e7d32;color:#fff;box-shadow:0 3px 10px rgba(46,125,50,.3)}
+
+.hist-card{background:#fff;border-radius:20px;box-shadow:0 2px 12px rgba(0,0,0,.08);overflow:hidden}
+.hist-top{padding:12px 14px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between}
+.hist-top h2{font-size:13px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.5px}
+.hl{max-height:200px;overflow-y:auto}
+.hi{padding:11px 14px;border-bottom:1px solid #f9f9f9;cursor:pointer;display:flex;align-items:center;gap:10px}
+.hi:active{background:#f5f5f5}
+.hi-t{font-size:14px;color:#333;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hi-d{font-size:11px;color:#bbb;white-space:nowrap}
+.nh{padding:22px;text-align:center;font-size:14px;color:#ccc}
+
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(70px);background:#212121;color:#fff;padding:11px 20px;border-radius:10px;font-size:14px;z-index:9999;transition:transform .28s;white-space:nowrap;pointer-events:none}
+.toast.on{transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎙 음성 텍스트 변환</h1>
+  <select class="lang-select" id="lang">
+    <option value="ko-KR">한국어</option>
+    <option value="en-US">English</option>
+    <option value="ja-JP">日本語</option>
+    <option value="zh-CN">中文</option>
+  </select>
+</header>
+
+<div class="main">
+
+  <!-- 권한 화면 (최초 1회) -->
+  <div id="permWrap">
+    <div class="pico">🎤</div>
+    <h2>마이크 권한 허용</h2>
+    <p>처음 한 번만 허용하면<br>이후에는 자동으로 사용됩니다.</p>
+    <button id="permBtn" onclick="requestPerm()">마이크 권한 허용하기</button>
+    <div id="permErr"></div>
+  </div>
+
+  <!-- 앱 화면 -->
+  <div id="appWrap">
+
+    <div class="status-card" id="sc">
+      <div class="mic-outer" id="mo">
+        <div class="ripple"></div>
+        <div class="ripple ripple2"></div>
+        <button class="mic-btn" id="mb" onclick="toggle()">🎤</button>
+      </div>
+      <div class="st-msg" id="sm">버튼을 눌러 시작</div>
+      <div class="interim-box" id="it"></div>
+      <div class="bars" id="bars">
+        <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      </div>
+    </div>
+
+    <div class="result-card">
+      <div class="card-top">
+        <h2>변환 결과</h2>
+        <div class="btns">
+          <button class="sb cp" onclick="doCopy()">📋 복사</button>
+          <button class="sb cl" onclick="doClear()">🗑 지우기</button>
+        </div>
+      </div>
+      <textarea id="rt" placeholder="말을 시작하면 여기에 텍스트가 표시됩니다..."></textarea>
+      <div class="card-bot"><span class="cnt" id="cnt">0자</span></div>
+    </div>
+
+    <div class="actions">
+      <button class="ab b" onclick="doCopy()">📋 클립보드 복사</button>
+      <button class="ab g" onclick="doShare()">📤 공유하기</button>
+    </div>
+
+    <div class="hist-card">
+      <div class="hist-top">
+        <h2>최근 기록</h2>
+        <button class="sb cl" onclick="clearHist()">전체 삭제</button>
+      </div>
+      <div class="hl" id="hl"></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* ── 권한: 최초 1회 ──────────────────────────────── */
+window.onload = () => {
+  if (localStorage.getItem('mic_ok') === '1') showApp();
+};
+
+async function requestPerm() {
+  const btn = document.getElementById('permBtn');
+  btn.textContent = '확인 중...'; btn.disabled = true;
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+    s.getTracks().forEach(t => t.stop());
+    localStorage.setItem('mic_ok', '1');
+    showApp();
+  } catch (err) {
+    btn.textContent = '마이크 권한 허용하기'; btn.disabled = false;
+    const el = document.getElementById('permErr');
+    el.style.display = 'block';
+    el.innerHTML = err.name === 'NotAllowedError'
+      ? '⚠️ <b>권한이 거부되었습니다.</b><br>① Chrome 주소창 🔒 아이콘 터치<br>② 마이크 → <b>허용</b> 선택<br>③ 새로고침 후 다시 시도'
+      : '오류: ' + err.message;
+  }
+}
+
+function showApp() {
+  document.getElementById('permWrap').style.display = 'none';
+  const aw = document.getElementById('appWrap');
+  aw.style.display = 'flex'; aw.style.flexDirection = 'column';
+  initRec(); renderHist();
+}
+
+/* ── 음성인식: Android 호환 방식 ─────────────────────
+   ★ continuous: false  ← 핵심 변경
+      Android Chrome은 continuous:true 를 제대로 지원하지 않아
+      같은 문장을 반복 전송함.
+      → 한 문장 인식 후 자동 종료 → onend 에서 자동 재시작
+      → 각 세션은 딱 하나의 깨끗한 final 결과만 반환
+*/
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec     = null;
+let going   = false;   // 사용자가 녹음 중인지
+let gotResult = false; // 이번 세션에서 결과를 받았는지
+
+function initRec() {
+  if (!SpeechRec) {
+    document.getElementById('sm').textContent = 'Chrome 브라우저가 필요합니다';
+    document.getElementById('mb').disabled = true;
+    return;
+  }
+  buildRec();
+}
+
+function buildRec() {
+  rec = new SpeechRec();
+  rec.lang           = document.getElementById('lang').value;
+  rec.continuous     = false;   // ★ Android 호환
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+
+  rec.onstart = () => {
+    gotResult = false;
+    document.getElementById('sc').classList.add('is-rec');
+    document.getElementById('mo').classList.add('is-rec');
+    document.getElementById('mb').textContent = '⏹';
+    document.getElementById('sm').textContent = '듣는 중...';
+    document.getElementById('bars').classList.add('on');
+  };
+
+  rec.onresult = (e) => {
+    let interim = '';
+    for (let i = 0; i < e.results.length; i++) {
+      const txt = e.results[i][0].transcript;
+      if (e.results[i].isFinal) {
+        // ★ final 결과 → textarea에 추가 (이 세션에서 딱 1번)
+        if (!gotResult) {
+          gotResult = true;
+          appendText(txt.trim());
+        }
+      } else {
+        interim += txt;
+      }
+    }
+    document.getElementById('it').textContent = interim;
+  };
+
+  rec.onerror = (e) => {
+    // no-speech / aborted 는 정상 흐름 — 재시작만 함
+    if (e.error !== 'no-speech' && e.error !== 'aborted') {
+      const map = {
+        'not-allowed'  : '마이크 권한 없음',
+        'network'      : '네트워크 오류',
+        'audio-capture': '마이크를 찾을 수 없습니다'
+      };
+      toast(map[e.error] || '오류: ' + e.error);
+    }
+  };
+
+  rec.onend = () => {
+    document.getElementById('it').textContent = '';
+    if (going) {
+      // 사용자가 아직 녹음 중 → 다음 문장 대기를 위해 재시작
+      document.getElementById('sm').textContent = '계속 말하세요...';
+      setTimeout(startOnce, 100);
+    } else {
+      stopUI();
+      saveHist();
+    }
+  };
+}
+
+function startOnce() {
+  if (!going) return;
+  try {
+    rec.lang = document.getElementById('lang').value;
+    rec.start();
+  } catch(e) {
+    // 이미 시작 중이면 무시
+  }
+}
+
+function toggle() {
+  if (!going) {
+    going = true;
+    startOnce();
+  } else {
+    going = false;
+    try { rec.abort(); } catch(e) {}
+    // onend 에서 stopUI + saveHist 호출됨
+  }
+}
+
+function stopUI() {
+  document.getElementById('sc').classList.remove('is-rec');
+  document.getElementById('mo').classList.remove('is-rec');
+  document.getElementById('mb').textContent = '🎤';
+  document.getElementById('sm').textContent = '버튼을 눌러 시작';
+  document.getElementById('bars').classList.remove('on');
+  document.getElementById('it').textContent = '';
+}
+
+function appendText(txt) {
+  if (!txt) return;
+  const ta  = document.getElementById('rt');
+  const sep = ta.value ? '\n' : '';
+  ta.value += sep + txt;
+  updCnt();
+  // 자동 스크롤
+  ta.scrollTop = ta.scrollHeight;
+}
+
+/* ── 기록 ──────────────────────────────────────── */
+let hist = [];
+try { hist = JSON.parse(localStorage.getItem('vtt5') || '[]'); } catch(e) {}
+
+function saveHist() {
+  const v = document.getElementById('rt').value.trim();
+  if (!v) return;
+  const now = new Date();
+  const d   = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  // 동일 내용 중복 방지
+  if (hist.length && hist[0].t === v) return;
+  hist.unshift({ t: v, d });
+  if (hist.length > 30) hist = hist.slice(0, 30);
+  try { localStorage.setItem('vtt5', JSON.stringify(hist)); } catch(e) {}
+  renderHist();
+}
+
+function renderHist() {
+  const el = document.getElementById('hl');
+  if (!hist.length) { el.innerHTML = '<div class="nh">아직 기록이 없습니다</div>'; return; }
+  el.innerHTML = hist.map((h, i) =>
+    `<div class="hi" onclick="loadH(${i})">
+      <span class="hi-t">${esc(h.t)}</span>
+      <span class="hi-d">${h.d}</span>
+    </div>`
+  ).join('');
+}
+
+function loadH(i)   { document.getElementById('rt').value = hist[i].t; updCnt(); toast('기록 불러오기 완료'); }
+function clearHist(){ hist=[]; try{localStorage.setItem('vtt5','[]');}catch(e){} renderHist(); toast('전체 삭제'); }
+function doClear()  { document.getElementById('rt').value=''; updCnt(); }
+function updCnt()   { document.getElementById('cnt').textContent = document.getElementById('rt').value.length.toLocaleString() + '자'; }
+
+function doCopy() {
+  const v = document.getElementById('rt').value.trim();
+  if (!v) { toast('복사할 텍스트가 없습니다'); return; }
+  (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject())
+    .then(() => toast('복사 완료 ✓'))
+    .catch(() => { document.getElementById('rt').select(); document.execCommand('copy'); toast('복사 완료 ✓'); });
+}
+
+function doShare() {
+  const v = document.getElementById('rt').value.trim();
+  if (!v) { toast('공유할 텍스트가 없습니다'); return; }
+  navigator.share ? navigator.share({ text: v }) : doCopy();
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('on');
+  setTimeout(() => el.classList.remove('on'), 2500);
+}
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>
